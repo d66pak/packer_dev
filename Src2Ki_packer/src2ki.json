@@ -1,0 +1,25 @@
+{
+  "builders": [
+    {
+      "type": "docker",
+      "image": "ubuntu",
+      "commit": true,
+      "changes": [
+        "EXPOSE 9001",
+        "CMD [\"/usr/local/bin/supervisord\"]"
+      ]
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "file",
+      "source": "{{template_dir}}/files/",
+      "destination": "/tmp"
+    },
+    {
+      "type": "ansible",
+      "user": "root",
+      "playbook_file": "provision.yml"
+    }
+  ]
+}

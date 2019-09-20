@@ -1,0 +1,25 @@
+---
+timezone: Australia/ACT
+sharedutils_git_repo: git@gitlab.softix.com:development/sharedUtils.git
+packages:
+  - language-pack-en
+  - build-essential
+  - python-pip
+  - python-dev
+  - git
+  - supervisor
+  - tzdata
+  - checkinstall
+  - libreadline-gplv2-dev
+  - libncursesw5-dev
+  - libssl1.0.0
+  - libssl-dev
+  - libsqlite3-dev
+  - tk-dev
+  - libgdbm-dev
+  - libc6-dev
+  - libbz2-dev
+  - unixodbc-dev
+  - libpq-dev
+  - wget
+  - zip

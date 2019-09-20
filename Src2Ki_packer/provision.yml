@@ -1,0 +1,173 @@
+---
+
+- name: Provision Python
+  hosts: all
+  gather_facts: no
+  tasks:
+    - name: Boostrap python
+      raw: test -e /usr/bin/python || (apt-get -y update && apt-get install -y python-minimal)
+
+- name: Provision image
+  hosts: all
+  become: yes
+  become_user: root
+  pre_tasks:
+    - name: Include variables
+      include_vars:
+         file: variables.yml
+  tasks:
+    - name: Apt inatall packages
+      apt:
+        name: "{{ item }}"
+        update_cache: yes
+      with_items: "{{ packages }}"
+
+    - name: Upgrade pip
+      pip:
+        name: pip
+        state: latest
+
+    - name: Pip install packages
+      pip:
+        requirements: /tmp/requirements.txt # Note: requirements.txt is copied to /tmp by Packer
+
+    - name: Set timezone
+      file:
+        src: "/usr/share/zoneinfo/{{ timezone }}"
+        dest: /etc/localtime
+        state: link
+        force: yes
+
+    - name: Ensure group "ubuntu" exists
+      group:
+        name: ubuntu
+        state: present
+
+    - name: Add the user 'ubuntu'
+      user:
+        name: ubuntu
+        group: ubuntu
+        shell: /bin/bash
+        home: /home/ubuntu
+        groups: sudo
+        append: yes
+
+    - name: Download unix odbc
+      unarchive:
+        src: ftp://ftp.unixodbc.org/pub/unixODBC/unixODBC-2.3.2.tar.gz
+        dest: /home/ubuntu/
+        remote_src: yes
+
+    - name: Configure unix odbc
+      shell: |
+        ./configure --enable-gui=no \
+                    --enable-drivers=no \
+                    --enable-iconv \
+                    --with-iconv-char-enc=UTF8 \
+                    --with-iconv-ucode-enc=UTF16LE \
+                    --libdir=/usr/lib/x86_64-linux-gnu \
+                    --prefix=/usr \
+                    --sysconfdir=/etc \
+                    --enable-stats=no >> config_result.log
+      args:
+        chdir: /home/ubuntu/unixODBC-2.3.2
+        creates: config_result.log
+
+    - name: Install unix odbc
+      shell: make install >> install_result.log
+      args:
+        chdir: /home/ubuntu/unixODBC-2.3.2
+        creates: install_result.log
+
+    - name: Fix the missing link required for Microsoft ODBC Driver (1)
+      file:
+        src: /usr/lib/x86_64-linux-gnu/libssl.so
+        dest: /lib/x86_64-linux-gnu/libssl.so.10
+        state: link
+        force: yes
+
+    - name: Fix the missing link required for Microsoft ODBC Driver (2)
+      file:
+        src: /usr/lib/x86_64-linux-gnu/libcrypto.so
+        dest: /lib/x86_64-linux-gnu/libcrypto.so.10
+        state: link
+        force: yes
+
+    - name: Copy msodbc file to ubuntu
+      copy:
+        src: /tmp/msodbcsql/msodbcsql-11.0.2270.0.tar.gz
+        dest: /home/ubuntu/msodbcsql-11.0.2270.0.tar.gz
+        remote_src: yes
+
+    - name: Unarchive msodbcsql
+      unarchive:
+        src: /home/ubuntu/msodbcsql-11.0.2270.0.tar.gz
+        dest: /home/ubuntu/
+        remote_src: yes
+
+    - name: Overwrite the install file
+      copy:
+        src: /tmp/msodbcsql/install.sh
+        dest: /home/ubuntu/msodbcsql-11.0.2270.0/install.sh
+        backup: yes
+        remote_src: yes
+
+    - name: Overwrite the build file
+      file:
+        src: /tmp/msodbcsql/build_dm.sh
+        dest: /home/ubuntu/msodbcsql-11.0.2270.0/build_dm.sh
+        backup: yes
+        remote_src: yes
+
+    - name: Set locale for Microsoft ODBC driver
+      shell: locale-gen en_US.utf8
+      args:
+        chdir: /home/ubuntu/msodbcsql-11.0.2270.0
+
+    - name: Install Microsoft ODBC driver
+      shell: ./install.sh install --accept-license --force >> install.log
+      args:
+        chdir: /home/ubuntu/msodbcsql-11.0.2270.0
+        creates: install.log
+
+    - name: Check ODBC config (1)
+      shell: cat /etc/odbcinst.ini
+      register: cat
+    - debug: var=cat.stdout_lines
+
+    - name: Check ODBC config (2)
+      shell: odbcinst -q -d -n "ODBC Driver 11 for SQL Server"
+      register: inst
+    - debug: var=inst.stdout_lines
+
+    - name: Ensure .ssh directory exists.
+      file:
+        path: /root/.ssh
+        state: directory
+        mode: 0700
+        owner: root
+        group: root
+
+    - name: Ensure GitLab deploy key is present on the server.
+      copy:
+        src: /tmp/deploy_key
+        dest: /root/.ssh/deploy_key
+        mode: 0600
+        owner: root
+        group: root
+        remote_src: yes
+
+    - name: Clone sharedUtils repository.
+      git:
+        repo: "{{ sharedutils_git_repo }}"
+        dest: /home/ubuntu/sharedUtils
+        version: develop
+        accept_hostkey: yes
+        key_file: /root/.ssh/deploy_key
+
+    - name: Change permissions on /home/ubuntu
+      file:
+        path: /home/ubuntu
+        owner: ubuntu
+        group: ubuntu
+        recurse: yes

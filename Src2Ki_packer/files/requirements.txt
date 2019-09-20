@@ -1,0 +1,9 @@
+virtualenv
+numpy
+pandas
+pymongo
+boto3
+pyodbc
+psycopg2
+sqlalchemy
+redshift-sqlalchemy

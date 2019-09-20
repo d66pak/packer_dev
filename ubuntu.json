@@ -1,0 +1,26 @@
+{
+  "builders": [
+    {
+      "type": "docker",
+      "image": "ubuntu",
+      "commit": true,
+      "changes": [
+        "EXPOSE 9001",
+        "CMD [\"/usr/local/bin/supervisord\"]"
+      ]
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "file",
+      "source": "{{template_dir}}/files/",
+      "destination": "/tmp"
+    },
+    {
+      "type": "shell",
+      "script": "{{template_dir}}/scripts/builder.sh",
+      "environment_vars": [ "BASE_URL={{user `base_url`}}" ],
+      "execute_command": "sh -c '{{ .Vars }} {{ .Path }}'"
+    }
+  ]
+}
